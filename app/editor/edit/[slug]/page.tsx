@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
+import { DeployStatus } from '@/components/DeployStatus'
+import { ToastContainer, useToast } from '@/components/Toast'
 
 interface PostData {
   slug: string
@@ -13,10 +15,13 @@ interface PostData {
   content?: string
 }
 
+type DeployState = 'idle' | 'submitting' | 'deploying' | 'completed' | 'error'
+
 export default function EditPostPage() {
   const router = useRouter()
   const params = useParams()
   const slug = params.slug as string
+  const { toasts, removeToast, success, error, loading } = useToast()
 
   const [post, setPost] = useState<PostData>({
     slug: '',
@@ -26,8 +31,9 @@ export default function EditPostPage() {
     tags: [],
   })
   const [content, setContent] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [deployStatus, setDeployStatus] = useState<DeployState>('idle')
+  const [deployMessage, setDeployMessage] = useState('')
   const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
@@ -63,11 +69,14 @@ export default function EditPostPage() {
     e.preventDefault()
 
     if (!post.title || !content) {
-      setError('请填写标题和文章内容')
+      error('请填写标题和文章内容')
       return
     }
 
-    setLoading(true)
+    setIsSubmitting(true)
+    setDeployStatus('submitting')
+
+    const toastId = loading('正在保存修改...')
 
     try {
       const response = await fetch('/api/posts', {
@@ -91,13 +100,41 @@ export default function EditPostPage() {
         throw new Error(data.error || '保存失败')
       }
 
-      // 使用 window.location 进行硬跳转
-      window.location.href = `/blog/${post.slug}`
+      removeToast(toastId)
+
+      if (data.mode === 'github') {
+        setDeployStatus('deploying')
+        success('修改已提交到 GitHub，正在部署...', 3000)
+
+        setTimeout(() => {
+          setDeployStatus('completed')
+          success('部署完成！', 5000)
+        }, 3000)
+      } else {
+        success('修改保存成功！', 2000)
+        setTimeout(() => {
+          window.location.href = `/blog/${post.slug}`
+        }, 1000)
+      }
     } catch (err) {
       console.error('Save error:', err)
-      setError(err instanceof Error ? err.message : '保存失败，请重试')
-      setLoading(false)
+      removeToast(toastId)
+      setDeployStatus('error')
+      setDeployMessage(err instanceof Error ? err.message : '保存失败，请重试')
+      error(err instanceof Error ? err.message : '保存失败，请重试')
+      setIsSubmitting(false)
     }
+  }
+
+  const handleViewSite = () => {
+    window.open(`/blog/${post.slug}`, '_blank')
+    setDeployStatus('idle')
+    setIsSubmitting(false)
+  }
+
+  const handleRetry = () => {
+    setDeployStatus('idle')
+    setIsSubmitting(false)
   }
 
   if (notFound) {
@@ -123,6 +160,16 @@ export default function EditPostPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      <DeployStatus
+        isDeploying={isSubmitting}
+        status={deployStatus}
+        message={deployMessage}
+        onViewSite={handleViewSite}
+        onRetry={handleRetry}
+      />
+
       <div className="mb-6 flex items-center justify-between">
         <Link
           href="/"
@@ -149,12 +196,6 @@ export default function EditPostPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {error && (
-          <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg">
-            {error}
-          </div>
-        )}
-
         {/* 标题 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -165,7 +206,8 @@ export default function EditPostPage() {
             value={post.title}
             onChange={(e) => setPost({ ...post, title: e.target.value })}
             required
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={isSubmitting}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             placeholder="请输入文章标题"
           />
         </div>
@@ -196,7 +238,8 @@ export default function EditPostPage() {
             value={post.date}
             onChange={(e) => setPost({ ...post, date: e.target.value })}
             required
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={isSubmitting}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
 
@@ -209,7 +252,8 @@ export default function EditPostPage() {
             value={post.excerpt}
             onChange={(e) => setPost({ ...post, excerpt: e.target.value })}
             rows={3}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={isSubmitting}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             placeholder="请输入文章摘要"
           />
         </div>
@@ -226,7 +270,8 @@ export default function EditPostPage() {
               const tags = e.target.value.split(',').map((tag) => tag.trim()).filter(Boolean)
               setPost({ ...post, tags })
             }}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={isSubmitting}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             placeholder="标签1, 标签2, 标签3"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -244,7 +289,8 @@ export default function EditPostPage() {
             onChange={(e) => setContent(e.target.value)}
             required
             rows={20}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+            disabled={isSubmitting}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             placeholder="请输入文章内容，支持 MDX 格式"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -256,16 +302,26 @@ export default function EditPostPage() {
         <div className="flex items-center gap-4">
           <button
             type="submit"
-            disabled={loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors font-medium"
+            disabled={isSubmitting}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors font-medium flex items-center gap-2"
           >
-            {loading ? '保存中...' : '保存修改'}
+            {isSubmitting ? (
+              <>
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                保存中...
+              </>
+            ) : (
+              '保存修改'
+            )}
           </button>
 
           <button
             type="button"
             onClick={() => router.push('/')}
-            disabled={loading}
+            disabled={isSubmitting}
             className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 transition-colors font-medium"
           >
             取消
