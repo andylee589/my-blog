@@ -13,6 +13,7 @@
     "@mdx-js/loader": "^3.0.1",
     "@mdx-js/react": "^3.0.1",
     "@next/mdx": "^14.2.35",
+    "@octokit/rest": "^20.1.2",
     "@types/mdx": "^2.0.10",
     "feed": "^4.2.2",
     "gray-matter": "^4.0.3",
