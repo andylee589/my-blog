@@ -108,7 +108,7 @@ export default function EditPostPage() {
             文章未找到
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            抱歉，找不到 slug 为 "{slug}" 的文章
+            抱歉，找不到 slug 为 &quot;{slug}&quot; 的文章
           </p>
           <Link
             href="/"
@@ -144,7 +144,7 @@ export default function EditPostPage() {
           编辑文章
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          修改 "{post.title || slug}" 的内容
+          修改 &quot;{post.title || slug}&quot; 的内容
         </p>
       </div>
 
